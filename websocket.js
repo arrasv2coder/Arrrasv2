@@ -11,7 +11,11 @@ function verifySignature(message, signature, key) {
 }
 wss.on('connection', (ws) => {
   console.log('New client connected');
-  const secretKey = ;
+  const randomBytes = crypto.randomBytes(16);
+  const randomValue = randomBytes.reduce((acc, byte, i) => {
+    return acc + byte * (256 ** i);
+  }, 0);
+  const secretKey = randomValue;
   const hmac = crypto.createHmac('sha256', secretKey);
   hmac.update('data');
   const hmacDigest = hmac.digest('hex');
