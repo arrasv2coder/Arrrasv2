@@ -6,3 +6,4 @@ Due to the current state of the arras.io game, we have decided to take matters i
 As a starting point, check Lucrehulk's reverse engineered arras. It will help for game physics and graphics.
 
 Current state : made some base communication functions, which must be debugged. The rust part is very dubious. There seems to be a minor problem in the graphics for serverjoin. A dependecy lock file must be added too.
+Rust will likely be wrapped with neon to make server part easier. Node js will only be used for sockets, requests (and encrypting/captchas), and server setup. Backend (game mechanics, data storage, maze generation) will be in rust, and pixijs frontend to display based on coordinates. Captchas are to be rendered server side and changed every half second at least.
