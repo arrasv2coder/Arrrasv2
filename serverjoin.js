@@ -1,6 +1,6 @@
 import { Application, Assets, Sprite } from 'pixi.js';
 
-(async () => {
+(async joinserver(server) => {
   // Create a new application
   const app = new Application();
 
@@ -96,5 +96,58 @@ import { Application, Assets, Sprite } from 'pixi.js';
           app.renderer.screen.width;
       star.sprite.rotation = Math.atan2(dyCenter, dxCenter) + Math.PI / 2;
     }
+    await Assets.load(
+    'https://pixijs.com/assets/webfont-loader/PixelifySans.ttf',
+  );
+
+  BitmapFont.install({
+    name: 'Custom',
+    style: {
+      fontFamily: 'PixelifySans',
+      fontSize: 140,
+      fill: '#ffffff',
+    },
+    chars: [
+      ['a', 'z'],
+      ['A', 'Z'],
+      ['0', '9'],
+    ],
+    resolution: 2,
+    padding: 4,
+    textureStyle: {
+      scaleMode: 'nearest',
+    },
+  });
+  const text = new BitmapText({
+    text: 'Joining',
+    style: {
+      fontFamily: 'Custom',
+      fontSize: 70,
+      fill: 'white',
+      align: 'center',
+    },
+    scale: 2,
+    anchor: 0.5,
+    position: { x: window.innerWidth / 2, y: window.innerHeight / 2 - 75 },
+  });
+
+  const text2 = new Text({
+    text: 'server n°'+str(server),
+    style: {
+      fontFamily: 'PixelifySans',
+      fontSize: 70,
+      fill: 'white',
+      align: 'center',
+    },
+    scale: 2,
+    textureStyle: {
+      scaleMode: 'linear',
+    },
+    anchor: 0.5,
+    position: { x: window.innerWidth / 2, y: window.innerHeight / 2 + 75 },
+  });
+
+  app.stage.addChild(text, text2);
+
   });
 })();
