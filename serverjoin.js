@@ -1,153 +1,102 @@
-import { Application, Assets, Sprite } from 'pixi.js';
-
-(async joinserver(server) => {
-  // Create a new application
-  const app = new Application();
-
-  // Initialize the application
-  await app.init({ resizeTo: window });
-
-  // Append the application canvas to the document body
-  document.body.appendChild(app.canvas);
-
-  // Load the star texture
-  const starTexture = await Assets.load('https://pixijs.com/assets/star.png');
-
-  const starAmount = 1000;
-  let cameraZ = 0;
-  const fov = 20;
-  const baseSpeed = 0.025;
-  let speed = 0;
-  let warpSpeed = 0;
-  const starStretch = 5;
-  const starBaseSize = 0.05;
-
-  // Create the stars
-  const stars = [];
-
-  for (let i = 0; i < starAmount; i++) {
-    const star = {
-      sprite: new Sprite(starTexture),
-      z: 0,
-      x: 0,
-      y: 0,
+use axum::{
+    routing::get,
+    http::{header, HeaderMap, StatusCode},
+    response::IntoResponse,
+    response::Html,
+    response::Response,
+    extract::State,
+    Json,
+    Router,
+};
+use rand::distr::{Alphanumeric, SampleString};
+use std::path::Path;
+use tokio::{fs,sync::oneshot,sync::Mutex};
+use image::{ImageReader,GenericImageView,Rgba,ImageFormat};
+use imageproc::{drawing::draw_text};
+use ab_glyph::{FontVec, PxScale};
+use std::io::Cursor;
+use std::sync::Arc;
+use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
+use sha2::{Sha256, Digest};
+#[derive(Clone)]
+struct AppState {
+    number: Arc<Mutex<i32>>,
+    ip: Arc<Mutex<Vec<i32>>>,
+}
+#[tokio::main]
+async fn main() {
+    let shared_state = AppState {
+        number : Arc::new(Mutex::new(0)),
+        ip : Arc::new(Mutex::new(vec![0])),
     };
+    let app = Router::new().route("/image",axum::routing::get(giveimage)).with_state(shared_state.clone()).route("/",axum::routing::get(homepage));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    let image_path = "images/background.png";
+    let font_vec = Vec::from(include_bytes!("../font.ttf") as &[u8]);
+    let font = FontVec::try_from_vec(font_vec).expect("cannot open font");
+    let scale = PxScale::from(200.0);
+    tokio::spawn(async move {
+        loop {
+            let mut number=shared_state.number.lock().await;
+            if *number<101{
+                let randomtext = Alphanumeric.sample_string(&mut rand::rng(), 16);
+                let image = match ImageReader::open(image_path).expect("cannot open image").decode() {
+                    Ok(img) => img, 
+                    Err(e) => {
+                        println!("Error loading image: {}", e);
+                        return; 
+                    }
+                };
+                let (dimension_x, dimension_y) = image.dimensions();
+                let new_image = draw_text(&image,
+                    Rgba([255, 255, 200, 255]),
+                    (dimension_x / 100).try_into().expect("x dimension error"),
+                    (dimension_y / 8).try_into().expect("y dimension error"),
+                    scale,
+                    &font,
+                    &randomtext
+                );
+                let filename = format!("images/captcha{}.png",number);
+                *number+=1;
+                new_image.save(filename).expect("failed to save");
+            }
+        }
+    });
+    println!("Listening on http://localhost:3000");
+    axum::serve(listener, app).await.unwrap();
+}
+async fn giveimage(State(state): State<AppState>,headers: HeaderMap)-> Response{
+    let mut number=state.number.lock().await;
+    *number-=1;
+    let filename=format!("images/captcha{}.png",number);
+    let path = Path::new(&filename);
+    let real_ip = headers
+        .get("X-Real-IP")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("0.0.0.0");
+    let user_agent = headers
+        .get("user-agent") // Note: HTTP headers are case-insensitive, Axum uses lowercase keys
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("Missing");
+    match fs::read(path).await {
+        Ok(bytes) => {
+            if let Err(e) = tokio::fs::remove_file(&filename).await {
+                eprintln!("Failed to delete file after serving: {}", e);
+            }
+            let headers = [
+                (header::CONTENT_TYPE, "image/png"),
+                (header::CACHE_CONTROL, "no-store, no-cache, must-revalidate"),
+            ];
 
-    star.sprite.anchor.x = 0.5;
-    star.sprite.anchor.y = 0.7;
-    randomizeStar(star, true);
-    app.stage.addChild(star.sprite);
-    stars.push(star);
-  }
-
-  function randomizeStar(star, initial) {
-    star.z = initial
-      ? Math.random() * 2000
-      : cameraZ + Math.random() * 1000 + 2000;
-
-    // Calculate star positions with radial random coordinate so no star hits the camera.
-    const deg = Math.random() * Math.PI * 2;
-    const distance = Math.random() * 50 + 1;
-
-    star.x = Math.cos(deg) * distance;
-    star.y = Math.sin(deg) * distance;
-  }
-
-  // Change flight speed every 5 seconds
-  setInterval(() => {
-    warpSpeed = warpSpeed > 0 ? 0 : 1;
-  }, 5000);
-
-  // Listen for animate update
-  app.ticker.add((time) => {
-    // Simple easing. This should be changed to proper easing function when used for real.
-    speed += (warpSpeed - speed) / 20;
-    cameraZ += time.deltaTime * 10 * (speed + baseSpeed);
-    for (let i = 0; i < starAmount; i++) {
-      const star = stars[i];
-
-      if (star.z < cameraZ) randomizeStar(star);
-
-      // Map star 3d position to 2d with really simple projection
-      const z = star.z - cameraZ;
-
-      star.sprite.x =
-        star.x * (fov / z) * app.renderer.screen.width +
-        app.renderer.screen.width / 2;
-      star.sprite.y =
-        star.y * (fov / z) * app.renderer.screen.width +
-        app.renderer.screen.height / 2;
-
-      // Calculate star scale & rotation.
-      const dxCenter = star.sprite.x - app.renderer.screen.width / 2;
-      const dyCenter = star.sprite.y - app.renderer.screen.height / 2;
-      const distanceCenter = Math.sqrt(
-        dxCenter * dxCenter + dyCenter * dyCenter,
-      );
-      const distanceScale = Math.max(0, (2000 - z) / 2000);
-
-      star.sprite.scale.x = distanceScale * starBaseSize;
-      // Star is looking towards center so that y axis is towards center.
-      // Scale the star depending on how fast we are moving, what the stretchfactor is
-      // and depending on how far away it is from the center.
-      star.sprite.scale.y =
-        distanceScale * starBaseSize +
-        (distanceScale * speed * starStretch * distanceCenter) /
-          app.renderer.screen.width;
-      star.sprite.rotation = Math.atan2(dyCenter, dxCenter) + Math.PI / 2;
+            (StatusCode::OK, headers, bytes).into_response()
+        }
+        Err(_) => {
+            (StatusCode::NOT_FOUND, "Image not found").into_response()
+        }
     }
-    await Assets.load(
-    'https://pixijs.com/assets/webfont-loader/PixelifySans.ttf',
-  );
+}
+async fn homepage() -> Html<&'static str>{
+    Html("<style>.responsive {width: 100%;height: auto;}</style><img src='/image' alt='captcha' class='responsive'><form action='/verify'><input type='text'></form>")
+}
 
-  BitmapFont.install({
-    name: 'Custom',
-    style: {
-      fontFamily: 'PixelifySans',
-      fontSize: 140,
-      fill: '#ffffff',
-    },
-    chars: [
-      ['a', 'z'],
-      ['A', 'Z'],
-      ['0', '9'],
-    ],
-    resolution: 2,
-    padding: 4,
-    textureStyle: {
-      scaleMode: 'nearest',
-    },
-  });
-  const text = new BitmapText({
-    text: 'Joining',
-    style: {
-      fontFamily: 'Custom',
-      fontSize: 70,
-      fill: 'white',
-      align: 'center',
-    },
-    scale: 2,
-    anchor: 0.5,
-    position: { x: window.innerWidth / 2, y: window.innerHeight / 2 - 75 },
-  });
-
-  const text2 = new Text({
-    text: 'server n°'+str(server),
-    style: {
-      fontFamily: 'PixelifySans',
-      fontSize: 70,
-      fill: 'white',
-      align: 'center',
-    },
-    scale: 2,
-    textureStyle: {
-      scaleMode: 'linear',
-    },
-    anchor: 0.5,
-    position: { x: window.innerWidth / 2, y: window.innerHeight / 2 + 75 },
-  });
-
-  app.stage.addChild(text, text2);
-
-  });
-})();
