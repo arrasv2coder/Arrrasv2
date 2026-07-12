@@ -8,4 +8,4 @@ As a starting point, check Lucrehulk's reverse engineered arras. It will help fo
 Current state : made some base communication functions, which must be debugged. The rust part is very dubious. There seems to be a minor problem in the graphics for serverjoin. A dependecy lock file must be added too.
 Rust will likely be wrapped with neon to make server part easier. Node js will only be used for sockets, requests (and encrypting/captchas), and server setup. Backend (game mechanics, data storage, maze generation) will be in rust, and pixijs frontend to display based on coordinates. Captchas are to be rendered server side and changed every half second at least.
 
-Current state on 11th july : switched to full rust, the image captcha works. The game data structure is very nearly done (except drones), the socket handling is done. The next test is physics loop.
+Current state on 11th july : switched to full rust, the image captcha works. The game data structure is very nearly done (except drones), the socket handling is done. The next step is physics loop.
